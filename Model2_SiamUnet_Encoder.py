@@ -66,9 +66,6 @@ class Model2_SiamUnet_Encoder(object):
         BACKBONE =  settings.model_backend
         custom_weights_file = "imagenet"
 
-        #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
-        #custom_weights_file = "/scratch/ruzicka/python_projects_large/AerialNet_VariousTasks/model_UNet-Resnet34_DSM_in01_95percOfTrain_8batch_100ep_dsm01proper.h5"
-
         #resolution_of_input = self.dataset.datasetInstance.IMAGE_RESOLUTION
         resolution_of_input = None
         self.model = self.create_model(backbone=BACKBONE, custom_weights_file=custom_weights_file, input_size = resolution_of_input, channels = 3)
@@ -270,148 +267,6 @@ class Model2_SiamUnet_Encoder(object):
             self.model.load_weights(path)
         print("Loaded model weights.")
 
-    def test(self, evaluator, show = True, save = False, threshold_fineness = 0.1):
-        print("Test")
-
-        test_L, test_R, test_V = self.dataset.test
-
-        if test_L.shape[3] > 3:
-            # 3 channels only - rgb
-            test_L = test_L[:,:,:,1:4]
-            test_R = test_R[:,:,:,1:4]
-        # label also reshape
-        if self.use_sigmoid_or_softmax == 'softmax':
-            test_V_cat = to_categorical(test_V)
-        else:
-            test_V_cat = test_V.reshape(test_V.shape + (1,))
-
-        predicted = self.model.predict(x=[test_L, test_R], batch_size=4)
-        metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0, batch_size=4)
-        metrics_info = self.model.metrics_names
-        print(list(zip(metrics_info, metrics)))
-
-        kfold_txt = "MISSED_" + self.settings.model_backend + "_KFold_" + str(
-            self.settings.TestDataset_Fold_Index) + "z" + str(self.settings.TestDataset_K_Folds)
-
-        if self.use_sigmoid_or_softmax == 'softmax':
-            # with just 2 classes I can hax:
-            predicted = predicted[:, :, :, 1]
-            # else:
-            #predicted = np.argmax(predicted, axis=3)
-            #print("predicted.shape:", predicted.shape)
-
-        else:
-            # chop off that last dimension
-            predicted = predicted.reshape(predicted.shape[:-1])
-
-        # undo preprocessing steps
-        predicted = self.dataPreprocesser.postprocess_labels(predicted)
-
-        save_text_file = self.save_plot_path + kfold_txt + "_MASK_TXT.txt"
-        mask_best_thr, mask_recall, mask_precision, mask_accuracy, mask_f1 = evaluator.metrics_autothr_f1_max(predicted, test_V, jump_by = threshold_fineness, save_text_file=save_text_file)
-        mask_stats = mask_best_thr, mask_recall, mask_precision, mask_accuracy, mask_f1
-        tiles_stats = []
-        print("Threshold automatically chosen as", mask_best_thr)
-
-        # Adding evaluation from the standpoint of each tile.
-        Tile_Based_Evaluation = True
-        if Tile_Based_Evaluation:
-            chosen_threshold = mask_best_thr
-            test_classlabels = evaluator.mask_label_into_class_label(self.dataset.test[2])
-            #test_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(self.dataset.test[2])
-
-            # This has to actually be thresholded before we calculate the tile label (we have to count occurance of 1s)
-            predictions_thresholded, _, _, _, _= evaluator.calculate_metrics(predicted, test_V, threshold=chosen_threshold)
-            predicted_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(predictions_thresholded)
-
-            print(test_classlabels[0:20])
-            print(predicted_classlabels[0:20])
-
-            print("TILE based EVALUATION")
-            #evaluator.histogram_of_predictions(test_classlabels)
-            #evaluator.histogram_of_predictions(predicted_classlabels)
-
-            # print("trying thresholds ...")
-            # evaluator.try_all_thresholds(predicted_labels, test_class_Y, np.arange(0.0,1.0,0.01), title_txt="Labels (0/1) evaluated [Change Class]") #NoChange
-
-            print("threshold=",chosen_threshold)
-            save_text_file = self.save_plot_path+kfold_txt+"_TILES_TXT.txt"
-            _, tiles_recall, tiles_precision, tiles_accuracy, tiles_f1 = evaluator.calculate_metrics(predicted_classlabels, test_classlabels, threshold=chosen_threshold, save_text_file=save_text_file) # thr arbitrary no? we have only 0/1 in here already
-            tiles_stats = mask_best_thr, tiles_recall, tiles_precision, tiles_accuracy, tiles_f1
-
-            # Get indices of the misclassified samples
-            misclassified_indices = np.where(predicted_classlabels != test_classlabels)
-            misclassified_indices = misclassified_indices[0]
-
-            text_to_save_missclassifieds = ""
-            print("misclassified_indices:", misclassified_indices)
-            text_to_save_missclassifieds += "misclassified_indices:"+str(misclassified_indices)+"\n"
-            for ind in misclassified_indices:
-                #print("idx", ind, ":", predicted_classlabels[ind]," != ",test_classlabels[ind])
-                text_to_save_missclassifieds += "idx "+ str(ind)+ ": " +str( predicted_classlabels[ind])+" != "+str(test_classlabels[ind])+"\n"
-
-            if save:
-                path = self.save_plot_path+"MissedIndices.txt"
-                file = open(path, "w")
-                file.write(text_to_save_missclassifieds)
-                file.close()
-
-        test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
-
-        if test_L.shape[3] > 3:
-            # 3 channels only - rgb
-            test_L = test_L[:,:,:,1:4]
-            test_R = test_R[:,:,:,1:4]
-
-
-        print("left images (test)")
-        self.debugger.explore_set_stats(test_L)
-        print("right images (test)")
-        self.debugger.explore_set_stats(test_R)
-        print("label images (test)")
-        self.debugger.explore_set_stats(test_V)
-        print("predicted images (test)")
-        self.debugger.explore_set_stats(predicted)
-
-        if Tile_Based_Evaluation:
-            print("Misclassified samples (in total", len(misclassified_indices),"):")
-            if save:
-                off = 0
-                by = 4
-                by = min(by, len(misclassified_indices))
-                while off < len(misclassified_indices):
-
-                    by_rem = min(by, len(misclassified_indices)-off)
-
-                    #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-                    self.debugger.viewQuadrupples(test_L[misclassified_indices], test_R[misclassified_indices], test_V[misclassified_indices], predicted[misclassified_indices], how_many=by_rem, off=off, show=show,save=save, name=self.save_plot_path+kfold_txt+"quad"+str(off)+"_"+self.settings.run_name)
-                    off += by
-
-        if show:
-            off = 0
-            by = 4
-            by = min(by, len(test_L))
-            while off < len(predicted):
-                #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-                self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off, show=show,save=save)
-                off += by
-        if save:
-            off = 0
-            by = 4
-            by = min(by, len(test_L))
-            until_n = min(by*8, len(test_L))
-            while off < until_n:
-                #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-                kfold_txt = self.settings.model_backend+"_KFold_" + str(self.settings.TestDataset_Fold_Index) + "z" + str(self.settings.TestDataset_K_Folds)
-                by_rem = min(by, until_n - off)
-
-                self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by_rem, off=off, show=show,save=save, name=self.save_plot_path+kfold_txt+"quad"+str(off)+"_"+self.settings.run_name)
-                off += by
-
-        statistics = mask_stats, tiles_stats
-        return statistics
-
-
 
     def test_on_specially_loaded_set(self, evaluator, show = True, save = False):
         print("Test: Debug, showing performance on other loaded data!")
@@ -446,27 +301,6 @@ class Model2_SiamUnet_Encoder(object):
         foo = copy.deepcopy(test)
         A = self.dataPreprocesser.process_dataset(test, foo, foo)
         test = A[0]
-
-        """
-        # load data from folders
-        import DataLoader, Debugger, DatasetInstance_OurAerial
-        self.dataLoaderTMP = DataLoader.DataLoader(self.settings)
-        self.debugger = Debugger.Debugger(self.settings)
-        dataset_variant = "256_cleanManual"
-        dataset_variant = "6368_special"
-        self.datasetInstanceTMP= DatasetInstance_OurAerial.DatasetInstance_OurAerial(self.settings, self.dataLoaderTMP, dataset_variant)
-        self.dataPreprocesserTMP = DataPreprocesser.DataPreprocesser(self.settings, self.datasetInstanceTMP)
-        self.data, self.paths = self.datasetInstanceTMP.load_dataset() # this is a big file, even just loading takes a lot of time!
-
-        print("TMP Dataset loaded with", len(self.data[0]), "images.")
-        self.train, self.val, self.test = self.datasetInstanceTMP.split_train_val_test(self.data)
-        self.train_paths, self.val_paths, self.test_paths = self.datasetInstanceTMP.split_train_val_test(self.paths)
-        print("Has ", len(self.train[0]), "train, ", len(self.val[0]), "val, ", len(self.test[0]), "test, ")
-
-        # dataPreprocesser is the original one, while dataPreprocesserTMP is just the small test set dataset
-        # we want to use the original one for preprocessing of the images!
-        self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)
-        """
 
         print("Finally we have", len(test[0]), "test images.")
 

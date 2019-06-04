@@ -340,219 +340,6 @@ class Evaluator(object):
 
         return sklearn_recall, sklearn_precision, sklearn_accuracy, sklearn_f1
 
-    def calculate_metrics(self, predictions, ground_truths, threshold = 0.5, verbose=2, save_text_file=""):
-
-        flavour_text = ""
-        if len(predictions.shape) > 1:
-            if verbose >= 2:
-                print("We have", len(predictions), "predictions, each is a", predictions[0].shape, "image.", predictions[0][0][0:3])
-                print("We have", len(ground_truths), "ground truths, each is a", ground_truths[0].shape, "image.", ground_truths[0][0][0:3])
-            flavour_text = "pixels"
-            # careful not to edit the label images here
-            predictions_copy = np.array(predictions)
-        else:
-            flavour_text = "labels"
-            predictions_copy = np.array([predictions])
-
-        # 1 threshold the data per each pixel
-
-        # Sith thinks in absolutes
-        for image in predictions_copy:
-            image[image >= threshold] = 1
-            image[image < threshold] = 0
-
-        # only "0.0" and "1.0" in the data now
-
-        #if True:
-        #    print("pred:",predictions_copy[0].astype(int))
-        #    print("gt:  ",ground_truths)
-
-        # 2 calculate T/F P/N
-
-        arr_predictions = predictions_copy.flatten()
-        arr_gts = ground_truths.flatten()
-
-        #print("We have", len(arr_predictions), "~", len(arr_gts), "pixels.")
-        assert len(arr_predictions) == len(arr_gts)
-
-        FN = 0
-        FP = 0
-        TP = 0
-        TN = 0
-
-        # from the standpoint of the "changed" (1.0) class:
-        for pixel_i in range(len(arr_predictions)):
-            pred = arr_predictions[pixel_i]
-            gt = arr_gts[pixel_i]
-
-            if pred == 0.0 and gt == 0.0:
-                TN += 1
-            elif pred == 1.0 and gt == 1.0:
-                TP += 1
-            elif pred == 1.0 and gt == 0.0:
-                FP += 1
-            elif pred == 0.0 and gt == 1.0:
-                FN += 1
-
-        total = FP + FN + TP + TN
-
-        # 3a generate confusion matrix
-        # 3b metrics - recall, precision, accuracy
-
-        if verbose >= 2:
-            print("Statistics over", total,flavour_text,":")
-            print("TP", TP, "\t ... correctly classified as a change.")
-            print("TN", TN, "\t ... correctly classified as a no-change.")
-            print("FP", FP, "\t ... classified as change while it's not.")
-            print("FN", FN, "\t ... classified as no-change while it is one.")
-
-        accuracy = float(TP + TN) / float(total)
-        precision = float(TP) / float(TP + FP)
-        recall = float(TP) / float(TP + FN)
-
-        print("accuracy", accuracy, "\t")
-        print("precision", precision, "\t")
-        print("recall", recall, "\t")
-
-        # 3b metrics - IoU
-        IoU = float(TP) / float(TP + FP + FN)
-        print("IoU", IoU)
-
-        #sklearn_precision = sklearn.metrics.precision_score(arr_gts, arr_predictions)
-        #sklearn_recall = sklearn.metrics.recall_score(arr_gts, arr_predictions)
-        #print("sklearn_precision", sklearn_precision, "\t")
-        #print("sklearn_recall", sklearn_recall, "\t")
-
-        sklearn_f1 = sklearn.metrics.f1_score(arr_gts, arr_predictions)
-        print("sklearn_f1", sklearn_f1, "\t")
-
-        labels = ["no change", "change"] # 0 no change, 1 change
-        if verbose >= 2:
-            print(sklearn.metrics.classification_report(arr_gts, arr_predictions, target_names=labels))
-            conf = sklearn.metrics.confusion_matrix(arr_gts, arr_predictions)
-            print(conf)
-
-            if save_text_file is not "":
-                text_report = str(sklearn.metrics.classification_report(arr_gts, arr_predictions, target_names=labels))
-                text_report += "\n"
-                text_report += str(conf)
-                file = open(save_text_file, "w")
-                file.write(text_report)
-                file.close()
-
-            print("=====================================================================================")
-
-        predictions_thresholded = predictions_copy
-        return predictions_thresholded, recall, precision, accuracy, sklearn_f1
-
-
-    # chopped out some unnecessary things:
-    def calculate_metrics_fast(self, predictions, ground_truths, threshold = 0.5, verbose=2):
-
-        flavour_text = ""
-        if len(predictions.shape) > 1:
-            if verbose >= 2:
-                print("We have", len(predictions), "predictions, each is a", predictions[0].shape, "image.", predictions[0][0][0:3])
-                print("We have", len(ground_truths), "ground truths, each is a", ground_truths[0].shape, "image.", ground_truths[0][0][0:3])
-            flavour_text = "pixels"
-            # careful not to edit the label images here
-            predictions_copy = np.array(predictions)
-        else:
-            flavour_text = "labels"
-            predictions_copy = np.array([predictions])
-
-        # 1 threshold the data per each pixel
-
-        # Sith thinks in absolutes
-        for image in predictions_copy:
-            image[image >= threshold] = 1
-            image[image < threshold] = 0
-
-        # only "0.0" and "1.0" in the data now
-
-        #if True:
-        #    print("pred:",predictions_copy[0].astype(int))
-        #    print("gt:  ",ground_truths)
-
-        # 2 calculate T/F P/N
-
-        arr_predictions = predictions_copy.flatten()
-        arr_gts = ground_truths.flatten()
-
-        #print("We have", len(arr_predictions), "~", len(arr_gts), "pixels.")
-        assert len(arr_predictions) == len(arr_gts)
-
-        FN = 0
-        FP = 0
-        TP = 0
-        TN = 0
-
-        # from the standpoint of the "changed" (1.0) class:
-        for pixel_i in range(len(arr_predictions)):
-            pred = arr_predictions[pixel_i]
-            gt = arr_gts[pixel_i]
-
-            if pred == 0.0 and gt == 0.0:
-                TN += 1
-            elif pred == 1.0 and gt == 1.0:
-                TP += 1
-            elif pred == 1.0 and gt == 0.0:
-                FP += 1
-            elif pred == 0.0 and gt == 1.0:
-                FN += 1
-
-        total = FP + FN + TP + TN
-
-        # 3a generate confusion matrix
-        # 3b metrics - recall, precision, accuracy
-
-        if verbose >= 2:
-            print("Statistics over", total,flavour_text,":")
-            print("TP", TP, "\t ... correctly classified as a change.")
-            print("TN", TN, "\t ... correctly classified as a no-change.")
-            print("FP", FP, "\t ... classified as change while it's not.")
-            print("FN", FN, "\t ... classified as no-change while it is one.")
-
-        accuracy = float(TP + TN) / float(total)
-        precision = float(TP) / float(TP + FP)
-        recall = float(TP) / float(TP + FN)
-
-        print("accuracy", accuracy, "\t")
-        print("precision", precision, "\t")
-        print("recall", recall, "\t")
-
-        predictions_thresholded = predictions_copy
-        return predictions_thresholded, recall, precision, accuracy
-
-    # select thr which maximizes the f1 score
-    def metrics_autothr_f1_max(self, predictions, ground_truths, jump_by = 0.1, save_text_file=""):
-        # force it selecting something 'sensible' for the threshold ...
-        range_values = np.arange(0.0+jump_by, 1.0, jump_by)
-
-        xs = []
-        ys_recalls = []
-        ys_precisions = []
-        ys_accuracies = []
-        ys_f1s = []
-        for thr in range_values:
-            xs.append(thr)
-            print("auto threshold=", thr)
-
-            f1 = self.calculate_f1(predictions, ground_truths, threshold=thr)
-            ys_f1s.append(f1)
-
-        max_f1_idx = np.argmax(ys_f1s)
-        best_thr = xs[max_f1_idx]
-
-        selected_recall, selected_precision, selected_accuracy, _ = self.calculate_recall_precision_accuracy(predictions, ground_truths,threshold=thr, need_f1=False, save_text_file=save_text_file)
-        selected_f1 = ys_f1s[max_f1_idx]
-
-        print("Selecting threshold as", best_thr, "as it maximizes the f1 score getting", selected_f1,
-              "(other scores are: recall", selected_recall, ", precision", selected_precision, ", acc", selected_accuracy, ")")
-
-        return best_thr, selected_recall, selected_precision, selected_accuracy, selected_f1
-
-
     def mask_label_into_class_label(self, mask_labels, img_resolution = 256, bigger_than_percent=3.0):
         """
         Converts the mask label images (for example 224x224 pixel image with 0s and 1s) into a single class label
@@ -676,7 +463,7 @@ class Evaluator(object):
             print("predicted_ITHINK.shape", predicted_ITHINK.shape, "should be the same as", predicted.shape)
             print("first pixels")
             for i in range(len(ensemble_predictions)):
-                print(ensemble_predictions[i][0][0])
+                print(ensemble_predictions[i][0][0][0])
             print("avg into")
             print(predicted_ITHINK[0][0][0])
             print("right? (they should!)")
@@ -899,7 +686,6 @@ class Evaluator(object):
         file.close()
 
 
-
         # save missclassifications (optionally)
 
         if optionally_save_missclassified:
@@ -973,7 +759,4 @@ class Evaluator(object):
         mask_stats = pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1, pixels_auc
         statistics = mask_stats, tiles_stats
         return statistics
-
-
-        #return tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1, tiles_best_thr
 

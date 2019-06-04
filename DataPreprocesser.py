@@ -154,23 +154,6 @@ class DataPreprocesser(object):
 
         return images_L, images_R
 
-    # Ye Olde(r) ways
-    def process_dataset_OLDSIMPLE(self, dataset):
-        lefts, rights, labels = dataset
-        # from 0-255 : into -0.5 - 0.5
-        #lefts = (lefts / 255.0) - 0.5
-        #rights = (rights / 255.0) - 0.5
-
-        # from 0-255 : into 0.0 - 1.0
-        lefts = (lefts / 255.0)
-        rights = (rights / 255.0)
-
-        # keep at 0-1 for the sigmoid
-        #labels = labels - 0.5
-        #labels = labels / 2.0
-
-        return [lefts, rights, labels]
-
     def postprocess_labels(self, labels):
         # serves to project final labels back to where they originally were
         # no need right now, we didn't touch the labels

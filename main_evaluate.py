@@ -36,11 +36,128 @@ model_used = "resnet50"
 INPUT_FILE_EXCLUSIONS = "/home/ruzickav/python_projects/ChangeDetectionProject/__OUTPUTS/ResNet50_ManualExclusions.txt"
 
 
+# weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_2z5]
+INPUT_FILE_EXCLUSIONS = "/home/ruzickav/python_projects/ChangeDetectionProject/__OUTPUTS/ResNet50_ManualExclusions_5folds_withVal.txt"
+#INPUT_FILE_EXCLUSIONS = ""
+star = '*resnet50-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_*'
+model_used = "resnet50"
+
+
 parser.add_argument('-model_backend', help='Model used in the encoder part of the U-Net structures model', default=model_used)
 parser.add_argument('-models_path_star', help='Path to models with reg exp selection', default=path+star)
 
 
 parser.add_argument('-input_file', help='Alternatively we can have a file with specified input models and their specific settings.', default=INPUT_FILE_EXCLUSIONS)
+
+
+def get_balanced_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
+    from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
+    import Settings
+
+    # init structures
+    import mock
+    args = mock.Mock()
+    args.name = "test"
+
+
+    settings = Settings.Settings(args)
+    WholeDataset = LargeDatasetHandler_AL(settings)
+
+    # load paths of our favourite dataset!
+    import DataLoader, DataPreprocesser, Debugger
+    import DatasetInstance_OurAerial
+
+    dataLoader = DataLoader.DataLoader(settings)
+    debugger = Debugger.Debugger(settings)
+
+    #h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
+    h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5"
+
+    datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, dataLoader, "256_cleanManual")
+
+    if not TMP_WHOLE_UNBALANCED:
+        # ! this one automatically balances the data + deletes misfits in the resolution
+        data, paths = datasetInstance.load_dataset()
+        lefts_paths, rights_paths, labels_paths = paths
+        print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
+
+    else:
+        # ! this one loads them all (CHECK: would some be deleted?)
+        paths = datasetInstance.load_dataset_ONLY_PATHS_UPDATE_FROM_THE_OTHER_ONE_IF_NEEDED()
+        lefts_paths, rights_paths, labels_paths = paths
+        print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
+
+    WholeDataset.initialize_from_just_paths(paths)
+
+    if in_memory:
+        assert not TMP_WHOLE_UNBALANCED
+        #WholeDataset.keep_it_all_in_memory()
+        WholeDataset.keep_it_all_in_memory(h5_file)
+
+    npy_path = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_BALCLASS.npy"
+
+    I_WANT_TO_RECOMPUTE_THE_LABELS = False
+    if I_WANT_TO_RECOMPUTE_THE_LABELS:
+        assert False # don't want to mistakenly recompute these ...
+        WholeDataset.compute_per_tile_class_in_batches()
+        WholeDataset.save_per_tile_class(npy_path)
+
+    WholeDataset.load_per_tile_class(npy_path)
+
+    WholeDataset.report()
+
+    return WholeDataset
+
+def get_unbalanced_dataset(in_memory=False):
+    assert in_memory == False
+
+    # prep to move the dataset to >> /cluster/work/igp_psr/ruzickav <<
+    # instead of loading indiv files, load batches in h5 files
+
+    from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
+    import Settings
+
+    # init structures
+    import mock
+    args = mock.Mock()
+    args.name = "test"
+
+
+    settings = Settings.Settings(args)
+    WholeDataset = LargeDatasetHandler_AL(settings)
+
+    # load paths of our favourite dataset!
+    import DataLoader, DataPreprocesser, Debugger
+    import DatasetInstance_OurAerial
+
+    dataLoader = DataLoader.DataLoader(settings)
+    debugger = Debugger.Debugger(settings)
+
+    datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, dataLoader, "256_cleanManual")
+
+    # ! this one loads them all (CHECK: would some be deleted?)
+    paths = datasetInstance.load_dataset_ONLY_PATHS_UPDATE_FROM_THE_OTHER_ONE_IF_NEEDED()
+    lefts_paths, rights_paths, labels_paths = paths
+    print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
+
+    WholeDataset.initialize_from_just_paths(paths)
+
+    if in_memory:
+        WholeDataset.keep_it_all_in_memory()
+
+    npy_path = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_unBALCLASS.npy"
+
+    I_WANT_TO_RECOMPUTE_THE_LABELS = False
+    if I_WANT_TO_RECOMPUTE_THE_LABELS:
+        assert False # don't want to mistakenly recompute these ...
+        WholeDataset.compute_per_tile_class_in_batches()
+        WholeDataset.save_per_tile_class(npy_path)
+
+    WholeDataset.load_per_tile_class(npy_path)
+
+    WholeDataset.report()
+
+    return WholeDataset
 
 def main(args):
     print(args)
@@ -74,9 +191,7 @@ def main(args):
     else:
         selected_model_files = glob.glob(args.models_path_star)
         selected_model_files.sort()
-        exclusions_by_idxs.append([])
 
-    print(exclusions_by_idxs)
 
     corresponding_fold_indices = []
     corresponding_K_of_folds = []
@@ -100,6 +215,10 @@ def main(args):
         corresponding_fold_indices.append(fold_idx)
         corresponding_K_of_folds.append(K_of_folds)
 
+        if args.input_file is "":
+            exclusions_by_idxs.append([])
+
+    print("exclusions_by_idxs", exclusions_by_idxs)
 
     print("We got these indices of folds", corresponding_fold_indices)
     print("And these K values for kfoldcrossval", corresponding_K_of_folds)
@@ -145,15 +264,14 @@ def main(args):
         ###############################################################################################################
         ###############################################################################################################
 
-        SimulateUnbalancedDataset = True
-        #SimulateUnbalancedDataset = False
+        #SimulateUnbalancedDataset = True
+        SimulateUnbalancedDataset = False
         if SimulateUnbalancedDataset:
 
             [lefts_paths_in_trainAndTest_already, rights_paths, labels_paths] = dataset.paths
             # dataset.train_paths < if we need to be more specific
             print("len(lefts_paths_in_trainAndTest)", len(lefts_paths_in_trainAndTest_already))
 
-            from ActiveLearning.LargeDatasetHandler_AL import get_unbalanced_dataset
             WholeDataset = get_unbalanced_dataset()
             all_left_paths = WholeDataset.paths[0]
 
@@ -365,6 +483,11 @@ def main(args):
     mask_precisions = []
     mask_accuracies = []
     mask_f1s = []
+    mask_AUCs = []
+
+    #         tiles_stats = tiles_best_thr, tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1
+    #         mask_stats = pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1, pixels_auc
+    #         statistics = mask_stats, tiles_stats
 
     for stats in statistics_over_models:
         mask_stats, tiles_stats = stats
@@ -382,6 +505,8 @@ def main(args):
         tiles_f1s.append(tiles_stats[4])
         mask_f1s.append(mask_stats[4])
 
+        mask_AUCs.append(mask_stats[5])
+
 
     # REPORT
     report_text = ""
@@ -396,6 +521,7 @@ def main(args):
     report_text += "mean mask_precisions = " + str( 100.0 *np.mean(mask_precisions) ) + " +- " + str( 100.0 *np.std(mask_precisions) ) + " std \n"
     report_text += "mean mask_accuracies = " + str( 100.0 *np.mean(mask_accuracies) ) + " +- " + str( 100.0 *np.std(mask_accuracies) ) + " std \n"
     report_text += "mean mask_f1s = " + str( 100.0 *np.mean(mask_f1s) ) + " +- " + str( 100.0 *np.std(mask_f1s) ) + " std \n"
+    report_text += "mean mask_AUCs = " + str( 100.0 *np.mean(mask_AUCs) ) + " +- " + str( 100.0 *np.std(mask_AUCs) ) + " std \n"
 
     file = open("evaluation_plots/report_boxplotStats_"+add_text+".txt", "w")
     file.write(report_text)
@@ -425,8 +551,9 @@ def main(args):
 
     fig2, ax2 = plt.subplots()
     ax2.set_title('KFoldCrossval statistics (per masks) - '+settings.model_backend)
-    data = [mask_recalls, mask_precisions, mask_accuracies, mask_f1s]
-    ax2.boxplot(data, labels = xs)
+    xs_pixels = ["recall", "precision", "accuracy", "f1", "AUC"]
+    data = [mask_recalls, mask_precisions, mask_accuracies, mask_f1s, mask_AUCs]
+    ax2.boxplot(data, labels = xs_pixels)
     ax2.set_ylim(0.0,1.0)
     #plt.show()
     plt.savefig("evaluation_plots/boxplot_masks_stats_"+add_text+".png")

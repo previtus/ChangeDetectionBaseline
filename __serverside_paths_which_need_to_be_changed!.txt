@@ -1,0 +1,44 @@
+
+main_evaluate.py
+    paths to load the models:
+        ( they also have the absolute paths >> )
+        INPUT_FILE_EXCLUSIONS = "/home/ruzickav/python_projects/ChangeDetectionProject/__OUTPUTS/ResNet50_ManualExclusions.txt"
+
+    (probably not server run!)
+
+LargeDatasetHandler_AL.py
+    calls stuff which is then determined by path in Settings:
+
+    [!] BATCH_PRECOMP_FOLDER = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/entire_dataset_as_batch_chunks/"
+    \-----> BATCH_PRECOMP_FOLDER = "/cluster/work/igp_psr/ruzickav/ChangeDetectionProject_files/entire_dataset_as_batch_chunks/"
+
+
+Settings.py
+    [!] self.large_file_folder = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/"
+    \-----> self.large_file_folder = "/cluster/home/ruzickav/Datasets/"
+
+main.py
+    [!] model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"].h5")
+    \-----> model.model.save("/cluster/home/ruzickav/SavedModels/weightsModel2_"+model_txt+"_["+kfold_txt+"].h5")
+
+    [!] force: matplotlib.use("Agg")
+
+HelperFunctions.py
+    [!] SERVER_HAX = True
+
+ +  copy these files there:
+         [ruzickav@lo-login-01 ~]$ ll Datasets/
+        -rw-rw-r-- 1 ruzickav ruzickav-group   286546 Mar 28 22:23 LABELS_-1_256x256_cleanManualBALVAL3.0_1.0.pickle
+        -rw-rw-r-- 1 ruzickav ruzickav-group   258674 Mar 28 22:23 LEFT_-1_256x256_cleanManualBALVAL3.0_1.0.pickle
+        -rw-rw-r-- 1 ruzickav ruzickav-group   258674 Mar 28 22:23 RIGHT_-1_256x256_cleanManualBALVAL3.0_1.0.pickle
+        -rw-rw-r-- 1 ruzickav ruzickav-group 10058871 Mar 28 22:18 saved_paths_2012_256x256_cleanManualALL.pickle
+        -rw-rw-r-- 1 ruzickav ruzickav-group 10058871 Mar 28 22:18 saved_paths_2015_256x256_cleanManualALL.pickle
+        -rw-rw-r-- 1 ruzickav ruzickav-group 11139756 Mar 28 22:18 saved_paths_vectors_256x256_cleanManualALL.pickle
+        [ruzickav@lo-login-01 ~]$ ll Datasets/datasets/
+        -rw-rw-r-- 1 ruzickav ruzickav-group 1887438848 May 29 15:44 INBALANCED_ADDITIONAL_LEFTS_DATASET_FOR_TESTS800_0.h5 << in dev, arguably skippable
+        -rw-rw-r-- 1 ruzickav ruzickav-group      25807 May 19 19:34 OurAerial_preloadedImgs_BALCLASS.npy
+        -rw-rw---- 1 ruzickav ruzickav-group 5058332672 May 19 22:30 OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5
+        -rw-rw-r-- 1 ruzickav ruzickav-group 1686112256 May 30 19:27 OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5
+        -rw-rw-r-- 1 ruzickav ruzickav-group    1033185 May 19 19:02 OurAerial_preloadedImgs_unBALCLASS.npy
+
+
