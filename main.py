@@ -33,9 +33,13 @@ def main(args):
     kfold_txt = "KFold_"+str(settings.TestDataset_Fold_Index)+"z"+str(settings.TestDataset_K_Folds)
     print(kfold_txt)
 
+    settings.model_backend = args.model_backend
+    settings.train_epochs = int(args.train_epochs)
+    settings.train_batch = int(args.train_batch)
+
     # resnet 101 approx 5-6 hours (per fold - might be a bit less ...)
     # resnet 50  approx 3-4 hours
-    model_txt = "cleanManual_"+args.train_epochs+"ep_ImagenetWgenetW_"+args.model_backend+"-"+args.train_batch+"batch_Augmentation1to1_ClassWeights1to3_TestVal"
+    model_txt = "cleanManual_"+str(settings.train_epochs)+"ep_ImagenetWgenetW_"+str(settings.model_backend)+"-"+str(settings.train_batch)+"batch_Augmentation1to1_ClassWeights1to3_TestVal"
     print(model_txt)
 
     dataset = Dataset.Dataset(settings)
@@ -46,10 +50,10 @@ def main(args):
     save = True
 
     #dataset.dataset
-    settings.model_backend = args.model_backend
-    settings.train_epochs = int(args.train_epochs)
-    settings.train_batch = int(args.train_batch)
     model = ModelHandler.ModelHandler(settings, dataset)
+
+    if not os.path.exists("plots/"):
+        os.makedirs("plots/")
 
     model.model.train(show=show,save=save)
 
